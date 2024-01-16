@@ -1,7 +1,7 @@
-Installation 
+Installation :
 pip3 install -r requirements.txt
 
-Necessary Tool List
+Necessary Tool List :
 gau 
 httpx
 nuclei
