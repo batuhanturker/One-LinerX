@@ -1,7 +1,7 @@
 # Installation
-git clone https://github.com/batuhanturker/One-LinerX
-pip3 install -r requirements.txt
-python3 onelinerx.py
+- git clone https://github.com/batuhanturker/One-LinerX
+- pip3 install -r requirements.txt
+- python3 onelinerx.py
 
 # Necessary Tool List
 - [gau](https://github.com/lc/gau)
