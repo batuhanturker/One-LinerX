@@ -14,3 +14,4 @@
 - [dalfox](https://github.com/hahwul/dalfox)
 - [uro](https://github.com/s0md3v/Uro)
 - [waybackurls](https://github.com/tomnomnom/waybackurls)
+-https://github.com/003random/getJS
