@@ -54,14 +54,13 @@ with open("parameters.txt", "r") as f:
 
 subprocess.run(["subfinder", "-dL", liste, "-o", "domain.txt"])
 
-httpx_output = subprocess.check_output(["httpx", "-l", "domain.txt"]).decode()
+subprocess.run(["httpx", "-l", "domain.txt", "-o", "httpx.txt"])
 
-print("[+] XSS Scan Started...")
 gau_output = subprocess.check_output(["gau", "--threads", "5"] + subdomains).decode()
 with open("Endpoints.txt", "w") as f:
     f.write(gau_output)
-
-katana_output = subprocess.check_output(["katana", "-jc"] + httpx_output.splitlines(), text=True, stderr=subprocess.STDOUT).strip()
+print("[+] XSS Control 1 Started...")
+katana_output = subprocess.check_output(["katana", "-jc"] + httpx_output).decode()
 with open("Endpoints.txt", "a") as f:
     f.write(katana_output)
 
@@ -69,15 +68,14 @@ uro_output = subprocess.check_output(["uro"], input="\n".join(gau_output + katan
 with open("Endpoints_F.txt", "w") as f:
     f.write(uro_output)
 
-print("[+] XSS Scan Started...")
 gf_output = subprocess.check_output(["gf", "xss"], input=uro_output.encode()).decode()
 with open("XSS.txt", "w") as f:
     f.write(gf_output)
-print("[+] XSS Scan Completed.")
 
 gxss_output = subprocess.check_output(["Gxss", "-p", "khXSS", "-o", "XSS_Ref.txt"], input=gf_output.encode()).decode()
 
 dalfox_output = subprocess.check_output(["dalfox", "file", "XSS_Ref.txt", "-o", "Vulnerable_XSS.txt"]).decode()
+print("[+] XSS Control 1 Completed.")
 
 print("[+] SQL Injection Scan 2 Started...")
 sql1_output = subprocess.check_output(["httpx", "-silent", "-mc", "You have an error in your SQL syntax"], input="\n".join(parameters).encode()).decode()
