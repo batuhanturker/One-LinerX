@@ -24,8 +24,9 @@ commands = [
     "git clone https://github.com/projectdiscovery/fuzzing-templates",
     "sudo apt autoremove",
     "sudo apt-get update && sudo apt-get upgrade",
-    "npm audit fix --force"
-    "cp -r /root/go/bin /usr/bin"
+    "npm audit fix --force",
+    "cp -r /root/go/bin /usr/bin",
+    "pip3 install -r requirements.txt"
 ]
 for command in commands:
     subprocess.run(command, shell=True)
