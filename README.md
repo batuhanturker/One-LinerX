@@ -1,9 +1,13 @@
-# Installation
-- git clone https://github.com/batuhanturker/One-LinerX
-- python3 setup.py
-- python3 onelinerx.py
+# One-LinerX
 
-# Necessary Tool List
+One-LinerX is a powerful reconnaissance tool written in Python that allows you to perform comprehensive scans using one-liner commands. It leverages various existing tools to gather information about a target quickly and efficiently.
+
+## Installation
+- Clone the repository: `git clone https://github.com/batuhanturker/One-LinerX`
+- Run setup.py: `python3 setup.py`
+- Start the tool: `python3 onelinerx.py`
+
+## Necessary Tool List
 - [gau](https://github.com/lc/gau)
 - [httpx](https://github.com/projectdiscovery/httpx)
 - [nuclei](https://github.com/projectdiscovery/nuclei)
