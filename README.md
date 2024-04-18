@@ -1,6 +1,6 @@
 # One-LinerX
 
-One-LinerX is a powerful reconnaissance tool written in Python that allows you to perform comprehensive scans using one-liner commands. It leverages various existing tools to gather information about a target quickly and efficiently.
+One-LinerX is a powerful reconnaissance tool written in Python that allows you to perform comprehensive scans using one-liner commands. It leverages various existing tools to gather information about a target efficiently.
 
 ## Installation
 - Clone the repository: `git clone https://github.com/batuhanturker/One-LinerX`
