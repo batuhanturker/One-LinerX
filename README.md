@@ -5,7 +5,7 @@ One-LinerX is a powerful reconnaissance tool written in Python that allows you t
 ## Installation
 - Clone the repository: `git clone https://github.com/batuhanturker/One-LinerX`
 - Run setup.py: `python3 setup.py`
-- Start the tool: `python3 onelinerx.py`
+- Start the tool: `python3 One-LinerX.py`
 
 ## Necessary Tool List
 - [gau](https://github.com/lc/gau)
