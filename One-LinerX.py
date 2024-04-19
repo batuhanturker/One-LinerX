@@ -49,18 +49,15 @@ with open("parameters.txt", "w") as f:
     for parameter in parameters:
         f.write(parameter + "\n")
 
-with open("parameters.txt", "r") as f:
-    urls = f.read().splitlines()
-
 subprocess.run(["subfinder", "-dL", liste, "-o", "domain.txt"])
-
 subprocess.run(["httpx", "-l", "domain.txt", "-o", "httpx.txt"])
 
 gau_output = subprocess.check_output(["gau", "--threads", "5"] + subdomains).decode()
 with open("Endpoints.txt", "w") as f:
     f.write(gau_output)
+
 print("[+] XSS Control 1 Started...")
-katana_output = subprocess.check_output(["katana", "-jc"] + httpx_output).decode()
+katana_output = subprocess.check_output(["katana", "-jc", "-l", "httpx.txt"]).decode()
 with open("Endpoints.txt", "a") as f:
     f.write(katana_output)
 
@@ -190,5 +187,4 @@ with open("all_result.txt", "w") as f:
         f.write(f"[+] {task_name} ({task_list}):\n")
         f.write("##########################################################\n")
         f.write(f"{task_output}\n\n")
-
 
